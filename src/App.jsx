@@ -88,6 +88,7 @@ export default function App() {
   const [selectedCalendarPropertyId, setSelectedCalendarPropertyId] = useState("");
 
   const [bookingForm, setBookingForm] = useState(emptyBooking);
+  const [editingBookingId, setEditingBookingId] = useState("");
 
   const notice = (text) => {
     setMessage(text);
@@ -174,10 +175,11 @@ export default function App() {
   const conflicts = useMemo(() => {
     return bookings.filter(
       (b) =>
+        b.id !== editingBookingId &&
         b.property_id === bookingForm.property_id &&
         datesOverlap(bookingForm.check_in, bookingForm.check_out, b.check_in, b.check_out)
     );
-  }, [bookings, bookingForm.property_id, bookingForm.check_in, bookingForm.check_out]);
+  }, [bookings, bookingForm.property_id, bookingForm.check_in, bookingForm.check_out, editingBookingId]);
 
   const filteredBookings = useMemo(() => {
     return bookings
@@ -245,6 +247,37 @@ export default function App() {
     notice("Property deleted.");
   };
 
+
+  const startEditBooking = (booking) => {
+    setEditingBookingId(booking.id);
+    setBookingForm({
+      property_id: booking.property_id || "",
+      guest_name: booking.guest_name || "",
+      phone: booking.phone || "",
+      source: booking.source || "Direct",
+      check_in: booking.check_in || "",
+      check_out: booking.check_out || "",
+      amount: booking.amount || "",
+      number_of_guests: booking.number_of_guests || "",
+      advance_paid: booking.advance_paid || "",
+      payment_mode: booking.payment_mode || "Cash",
+      balance_amount: booking.balance_amount || "",
+      notes: booking.notes || "",
+    });
+    setActiveView("bookings");
+    notice("Editing booking. Update details and press Update Booking.");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const cancelEditBooking = () => {
+    setEditingBookingId("");
+    setBookingForm({
+      ...emptyBooking,
+      property_id: properties[0]?.id || "",
+    });
+    notice("Booking edit cancelled.");
+  };
+
   const addBooking = async () => {
     if (!bookingForm.property_id) return notice("Select a property.");
     if (!bookingForm.guest_name || !bookingForm.check_in || !bookingForm.check_out) {
@@ -257,19 +290,33 @@ export default function App() {
       return notice("Date already booked for this property. Existing booking is shown below.");
     }
 
-    const { error } = await supabase.from("bookings").insert({
-      ...bookingForm,
-      created_by: session?.user?.id || null,
-    });
+    let error;
+
+    if (editingBookingId) {
+      const result = await supabase
+        .from("bookings")
+        .update({
+          ...bookingForm,
+        })
+        .eq("id", editingBookingId);
+      error = result.error;
+    } else {
+      const result = await supabase.from("bookings").insert({
+        ...bookingForm,
+        created_by: session?.user?.id || null,
+      });
+      error = result.error;
+    }
 
     if (error) return notice(error.message);
 
+    setEditingBookingId("");
     setBookingForm({
       ...emptyBooking,
       property_id: properties[0]?.id || "",
     });
     await loadData();
-    notice("Booking saved.");
+    notice(editingBookingId ? "Booking updated." : "Booking saved.");
   };
 
   const deleteBooking = async (id) => {
@@ -342,7 +389,7 @@ export default function App() {
           <div className="loginHeader">
             <div className="iconBox"><Lock size={30} /></div>
             <div>
-              <h1>Aether Property Manager</h1>
+              <h1>GTV Hospitality</h1>
               <p>Cloud login powered by Supabase</p>
             </div>
           </div>
@@ -373,7 +420,7 @@ export default function App() {
     <div className="app">
       <header>
         <div>
-          <h1>Aether Property Manager</h1>
+          <h1>GTV Hospitality</h1>
           <p>Logged in as {session.user.email}</p>
         </div>
         <nav>
@@ -489,7 +536,7 @@ export default function App() {
       {activeView === "bookings" && (
         <section className="twoCol">
           <div className="card">
-            <h2>Add Booking</h2>
+            <h2>{editingBookingId ? "Edit Booking" : "Add Booking"}</h2>
 
             <label>Property</label>
             <select value={bookingForm.property_id} onChange={(e) => setBookingForm({ ...bookingForm, property_id: e.target.value })}>
@@ -544,7 +591,15 @@ export default function App() {
               <div className="successBox"><CheckCircle2 size={18} /> Dates available.</div>
             )}
 
-            <button className="primaryBtn" onClick={addBooking}>Save Booking</button>
+            <button className="primaryBtn" onClick={addBooking}>
+              {editingBookingId ? "Update Booking" : "Save Booking"}
+            </button>
+
+            {editingBookingId && (
+              <button className="secondaryBtn" onClick={cancelEditBooking}>
+                Cancel Edit
+              </button>
+            )}
           </div>
 
           <div className="card">
@@ -574,7 +629,10 @@ export default function App() {
                     <p>Balance: {b.balance_amount ? "₹" + b.balance_amount : "-"}</p>
                     {b.notes && <p>Notes: {b.notes}</p>}
                   </div>
-                  <button className="dangerSoft" onClick={() => deleteBooking(b.id)}><Trash2 size={15} /></button>
+                  <div className="actionButtons">
+                    <button onClick={() => startEditBooking(b)}>Edit</button>
+                    <button className="dangerSoft" onClick={() => deleteBooking(b.id)}><Trash2 size={15} /></button>
+                  </div>
                 </div>
               );
             })}
