@@ -193,15 +193,6 @@ export default function App() {
       .sort((a, b) => new Date(a.check_in) - new Date(b.check_in));
   }, [bookings, properties, query, filterProperty]);
 
-  const upcomingBookings = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    return bookings
-      .filter((b) => new Date(b.check_out + "T00:00:00") >= today)
-      .sort((a, b) => new Date(a.check_in) - new Date(b.check_in));
-  }, [bookings]);
-
   const buildCalendarDays = (propertyId) => {
     const [yearText, monthText] = calendarMonth.split("-");
     const year = Number(yearText);
@@ -448,27 +439,7 @@ export default function App() {
       <section className="stats">
         <div><Building2 /><span>Properties</span><b>{properties.length}</b></div>
         <div><CalendarDays /><span>Bookings</span><b>{bookings.length}</b></div>
-        <div><CheckCircle2 /><span>Upcoming</span><b>{upcomingBookings.length}</b></div>
-      </section>
-
-      <section className="card compactCard">
-        <h2>Upcoming Bookings</h2>
-        {upcomingBookings.length === 0 ? (
-          <div className="empty smallEmpty">No upcoming bookings.</div>
-        ) : (
-          <div className="upcomingScroll">
-            {upcomingBookings.map((b) => {
-              const p = properties.find((x) => x.id === b.property_id);
-              return (
-                <div className="miniBookingRow" key={b.id}>
-                  <b>{b.guest_name}</b>
-                  <span>{p?.name || "Deleted property"}</span>
-                  <span>{formatDate(b.check_in)} to {formatDate(b.check_out)}</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <div><CheckCircle2 /><span>Upcoming</span><b>{bookings.filter((b) => new Date(b.check_out) >= new Date()).length}</b></div>
       </section>
 
       {activeView === "calendar" && (
@@ -538,17 +509,6 @@ export default function App() {
                     <div>
                       <b>{p.name}</b>
                       <p>{bookings.filter((b) => b.property_id === p.id).length} booking(s)</p>
-                      <div className="propertyBookingList">
-                        {bookings
-                          .filter((b) => b.property_id === p.id)
-                          .sort((a, b) => new Date(a.check_in) - new Date(b.check_in))
-                          .map((booking) => (
-                            <div className="propertyBookingMini" key={booking.id}>
-                              <span>{formatDate(booking.check_in)} to {formatDate(booking.check_out)}</span>
-                              <b>{booking.guest_name}</b>
-                            </div>
-                          ))}
-                      </div>
                     </div>
                     <div>
                       <button onClick={() => { setEditingPropertyId(p.id); setEditingPropertyName(p.name); }}>Edit</button>
