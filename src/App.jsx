@@ -89,6 +89,7 @@ export default function App() {
 
   const [bookingForm, setBookingForm] = useState(emptyBooking);
   const [editingBookingId, setEditingBookingId] = useState("");
+  const [expandedPropertyId, setExpandedPropertyId] = useState("");
 
   const notice = (text) => {
     setMessage(text);
@@ -464,6 +465,9 @@ export default function App() {
                   <b>{b.guest_name}</b>
                   <span>{p?.name || "Deleted property"}</span>
                   <span>{formatDate(b.check_in)} to {formatDate(b.check_out)}</span>
+                  <span>Total: {b.amount ? "₹" + b.amount : "-"}</span>
+                  <span>Advance: {b.advance_paid ? "₹" + b.advance_paid : "-"}</span>
+                  <span>Balance: {b.balance_amount ? "₹" + b.balance_amount : "-"}</span>
                 </div>
               );
             })}
@@ -535,20 +539,38 @@ export default function App() {
                   </>
                 ) : (
                   <>
-                    <div>
-                      <b>{p.name}</b>
-                      <p>{bookings.filter((b) => b.property_id === p.id).length} booking(s)</p>
-                      <div className="propertyBookingList">
-                        {bookings
-                          .filter((b) => b.property_id === p.id)
-                          .sort((a, b) => new Date(a.check_in) - new Date(b.check_in))
-                          .map((booking) => (
-                            <div className="propertyBookingMini" key={booking.id}>
-                              <span>{formatDate(booking.check_in)} to {formatDate(booking.check_out)}</span>
-                              <b>{booking.guest_name}</b>
-                            </div>
-                          ))}
+                    <div className="propertyDetailsBlock">
+                      <div className="propertyTitleRow">
+                        <div>
+                          <b>{p.name}</b>
+                          <p>{bookings.filter((b) => b.property_id === p.id).length} booking(s)</p>
+                        </div>
+                        <button
+                          className="arrowBtn"
+                          onClick={() => setExpandedPropertyId(expandedPropertyId === p.id ? "" : p.id)}
+                          title="Show property bookings"
+                        >
+                          {expandedPropertyId === p.id ? "▲" : "▼"}
+                        </button>
                       </div>
+
+                      {expandedPropertyId === p.id && (
+                        <div className="propertyBookingList">
+                          {bookings.filter((b) => b.property_id === p.id).length === 0 ? (
+                            <p className="mutedSmall">No bookings for this property.</p>
+                          ) : (
+                            bookings
+                              .filter((b) => b.property_id === p.id)
+                              .sort((a, b) => new Date(a.check_in) - new Date(b.check_in))
+                              .map((booking) => (
+                                <div className="propertyBookingMini" key={booking.id}>
+                                  <span>{formatDate(booking.check_in)} to {formatDate(booking.check_out)}</span>
+                                  <b>{booking.guest_name}</b>
+                                </div>
+                              ))
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div>
                       <button onClick={() => { setEditingPropertyId(p.id); setEditingPropertyName(p.name); }}>Edit</button>
