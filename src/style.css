@@ -119,3 +119,74 @@ nav button.active { background: #0f172a; color: white; }
     grid-template-columns: 1fr;
   }
 }
+
+/* GTV update: arrow property bookings and payment details in upcoming */
+.propertyDetailsBlock {
+  width: 100%;
+}
+
+.propertyTitleRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.arrowBtn {
+  background: #e2e8f0;
+  color: #0f172a;
+  min-width: 42px;
+  padding: 8px 12px;
+  border-radius: 12px;
+}
+
+.propertyBookingList {
+  margin-top: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.propertyBookingMini {
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 8px;
+  display: grid;
+  gap: 2px;
+}
+
+.propertyBookingMini span {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.propertyBookingMini b {
+  font-size: 13px;
+  color: #111827;
+}
+
+.mutedSmall {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.miniBookingRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.4fr 1fr 1fr 1fr;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.miniBookingRow span {
+  color: #64748b;
+  font-size: 14px;
+}
+
+@media (max-width: 850px) {
+  .miniBookingRow {
+    grid-template-columns: 1fr;
+  }
+}
