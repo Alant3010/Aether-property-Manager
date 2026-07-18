@@ -58,6 +58,26 @@ const emptyBooking = {
   notes: "",
 };
 
+const CATEGORIES = [
+  { key: "can_view_calendar", label: "Calendar" },
+  { key: "can_add_booking", label: "Property Booking Entry" },
+  { key: "can_edit_booking", label: "Edit the Entry" },
+  { key: "can_cancel_booking", label: "Cancel the Entry" },
+  { key: "can_edit_upcoming", label: "Upcoming Bookings Edit" },
+  { key: "can_add_property", label: "Property Addition" },
+  { key: "can_edit_property", label: "Property Edit" },
+  { key: "can_delete_property", label: "Property Delete" },
+  { key: "can_add_user", label: "Add Users" },
+  { key: "can_delete_user", label: "Delete Users" },
+  { key: "can_export", label: "Export" },
+];
+
+function emptyPermissionSet(defaultValue) {
+  const obj = {};
+  CATEGORIES.forEach((c) => (obj[c.key] = defaultValue));
+  return obj;
+}
+
 export default function App() {
   const [session, setSession] = useState(null);
   const [authMode, setAuthMode] = useState("login");
@@ -80,6 +100,12 @@ export default function App() {
 
   const [staffEmail, setStaffEmail] = useState("");
   const [staffPassword, setStaffPassword] = useState("");
+  const [newStaffPermissions, setNewStaffPermissions] = useState(() => emptyPermissionSet(false));
+  const [newStaffIsAdmin, setNewStaffIsAdmin] = useState(false);
+
+  const [myProfile, setMyProfile] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [allProfiles, setAllProfiles] = useState([]);
 
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const now = new Date();
@@ -94,6 +120,43 @@ export default function App() {
   const notice = (text) => {
     setMessage(text);
     setTimeout(() => setMessage(""), 4500);
+  };
+
+  const can = (key) => {
+    if (!myProfile) return false;
+    if (myProfile.is_super_admin || myProfile.is_admin) return true;
+    return !!myProfile[key];
+  };
+  const isAdmin = !!(myProfile && (myProfile.is_admin || myProfile.is_super_admin));
+  const isSuperAdmin = !!(myProfile && myProfile.is_super_admin);
+
+  const loadProfile = async (userId) => {
+    setProfileLoading(true);
+    try {
+      const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).single();
+      if (error) {
+        console.error(error);
+        notice("Could not load your permissions. Contact an admin.");
+        setMyProfile(null);
+        return;
+      }
+      if (data.is_disabled) {
+        notice("Your access has been disabled. Contact an admin.");
+        await supabase.auth.signOut();
+        setSession(null);
+        setMyProfile(null);
+        return;
+      }
+      setMyProfile(data);
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const loadProfiles = async () => {
+    const { data, error } = await supabase.from("profiles").select("*").order("email");
+    if (error) return notice(error.message);
+    setAllProfiles(data || []);
   };
 
   const loadData = async () => {
@@ -126,16 +189,47 @@ export default function App() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
-      if (data.session) loadData();
+      if (data.session) {
+        loadData();
+        loadProfile(data.session.user.id);
+      } else {
+        setProfileLoading(false);
+      }
     });
 
     const { data } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
-      if (newSession) loadData();
+      if (newSession) {
+        loadData();
+        loadProfile(newSession.user.id);
+      } else {
+        setMyProfile(null);
+      }
     });
 
     return () => data.subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!myProfile) return;
+    if ((myProfile.can_add_user || myProfile.can_delete_user || isAdmin) && activeView === "users") {
+      loadProfiles();
+    }
+  }, [myProfile, activeView]);
+
+  useEffect(() => {
+    if (!myProfile) return;
+    const viewAllowed = {
+      calendar: can("can_view_calendar"),
+      bookings: can("can_add_booking") || can("can_edit_booking") || can("can_cancel_booking") || can("can_edit_upcoming"),
+      properties: can("can_add_property") || can("can_edit_property") || can("can_delete_property"),
+      users: can("can_add_user") || can("can_delete_user"),
+    };
+    if (!viewAllowed[activeView]) {
+      const firstAllowed = Object.keys(viewAllowed).find((v) => viewAllowed[v]);
+      if (firstAllowed) setActiveView(firstAllowed);
+    }
+  }, [myProfile]);
 
   const login = async () => {
     if (!email || !password) return notice("Enter email and password.");
@@ -338,11 +432,74 @@ export default function App() {
 
   const addStaffUser = async () => {
     if (!staffEmail || !staffPassword) return notice("Enter staff email and password.");
-    const { error } = await supabase.auth.signUp({ email: staffEmail, password: staffPassword });
+    setLoading(true);
+    const adminSession = session;
+    try {
+      const { data, error } = await supabase.auth.signUp({ email: staffEmail, password: staffPassword });
+      if (error) return notice(error.message);
+
+      // signUp swaps the browser session to the new user; restore the admin's session.
+      if (adminSession) {
+        await supabase.auth.setSession({
+          access_token: adminSession.access_token,
+          refresh_token: adminSession.refresh_token,
+        });
+      }
+
+      const newUserId = data?.user?.id;
+      if (newUserId) {
+        const permissionValues = {};
+        CATEGORIES.forEach((c) => (permissionValues[c.key] = newStaffIsAdmin ? true : !!newStaffPermissions[c.key]));
+        const { error: profileError } = await supabase.from("profiles").upsert({
+          id: newUserId,
+          email: staffEmail,
+          is_admin: newStaffIsAdmin,
+          is_super_admin: false,
+          is_disabled: false,
+          ...permissionValues,
+        });
+        if (profileError) notice("User created, but saving permissions failed: " + profileError.message);
+        else notice("Staff account created with the selected permissions.");
+      } else {
+        notice("Staff account created. Confirm their email if required, then set permissions once they appear in the Users list.");
+      }
+
+      setStaffEmail("");
+      setStaffPassword("");
+      setNewStaffPermissions(emptyPermissionSet(false));
+      setNewStaffIsAdmin(false);
+      await loadProfiles();
+    } catch (err) {
+      console.error(err);
+      notice("Failed to create staff user.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateProfilePermission = async (profileId, key, value) => {
+    const { error } = await supabase.from("profiles").update({ [key]: value }).eq("id", profileId);
     if (error) return notice(error.message);
-    setStaffEmail("");
-    setStaffPassword("");
-    notice("Staff login created. Confirm email if Supabase requires it.");
+    await loadProfiles();
+  };
+
+  const updateProfileAdmin = async (profileId, value) => {
+    const updates = { is_admin: value };
+    if (value) CATEGORIES.forEach((c) => (updates[c.key] = true));
+    const { error } = await supabase.from("profiles").update(updates).eq("id", profileId);
+    if (error) return notice(error.message);
+    await loadProfiles();
+  };
+
+  const setUserDisabled = async (profileId, disabled) => {
+    const { error } = await supabase.from("profiles").update({ is_disabled: disabled }).eq("id", profileId);
+    if (error) return notice(error.message);
+    await loadProfiles();
+    notice(
+      disabled
+        ? "User access disabled — they can no longer use the app. Full account deletion needs a backend service-role function."
+        : "User access re-enabled."
+    );
   };
 
   const exportCSV = () => {
@@ -434,17 +591,28 @@ export default function App() {
           <p>Logged in as {session.user.email}</p>
         </div>
         <nav>
-          <button className={activeView === "calendar" ? "active" : ""} onClick={() => setActiveView("calendar")}>Calendar</button>
-          <button className={activeView === "bookings" ? "active" : ""} onClick={() => setActiveView("bookings")}>Bookings</button>
-          <button className={activeView === "properties" ? "active" : ""} onClick={() => setActiveView("properties")}>Properties</button>
-          <button className={activeView === "users" ? "active" : ""} onClick={() => setActiveView("users")}>Users</button>
-          <button onClick={exportCSV}><Download size={15} /> Export</button>
+          {can("can_view_calendar") && (
+            <button className={activeView === "calendar" ? "active" : ""} onClick={() => setActiveView("calendar")}>Calendar</button>
+          )}
+          {(can("can_add_booking") || can("can_edit_booking") || can("can_cancel_booking") || can("can_edit_upcoming")) && (
+            <button className={activeView === "bookings" ? "active" : ""} onClick={() => setActiveView("bookings")}>Bookings</button>
+          )}
+          {(can("can_add_property") || can("can_edit_property") || can("can_delete_property")) && (
+            <button className={activeView === "properties" ? "active" : ""} onClick={() => setActiveView("properties")}>Properties</button>
+          )}
+          {(can("can_add_user") || can("can_delete_user")) && (
+            <button className={activeView === "users" ? "active" : ""} onClick={() => setActiveView("users")}>Users</button>
+          )}
+          {can("can_export") && <button onClick={exportCSV}><Download size={15} /> Export</button>}
           <button className="dangerSoft" onClick={logout}><LogOut size={15} /> Logout</button>
         </nav>
       </header>
 
       {message && <div className="topNotice">{message}</div>}
-      {loading && <div className="topNotice">Loading...</div>}
+      {(loading || profileLoading) && <div className="topNotice">Loading...</div>}
+      {!profileLoading && !myProfile && (
+        <div className="topNotice">No permissions profile found for your account. Ask a super admin to check the Users list.</div>
+      )}
 
       <section className="stats">
         <div><Building2 /><span>Properties</span><b>{properties.length}</b></div>
@@ -468,6 +636,9 @@ export default function App() {
                   <span>Total: {b.amount ? "₹" + b.amount : "-"}</span>
                   <span>Advance: {b.advance_paid ? "₹" + b.advance_paid : "-"}</span>
                   <span>Balance: {b.balance_amount ? "₹" + b.balance_amount : "-"}</span>
+                  {can("can_edit_upcoming") && (
+                    <button onClick={() => startEditBooking(b)}>Edit</button>
+                  )}
                 </div>
               );
             })}
@@ -475,7 +646,7 @@ export default function App() {
         )}
       </section>
 
-      {activeView === "calendar" && (
+      {activeView === "calendar" && can("can_view_calendar") && (
         <section className="card">
           <div className="sectionHeader">
             <div>
@@ -523,10 +694,12 @@ export default function App() {
       {activeView === "properties" && (
         <section className="card">
           <h2>Manage Properties</h2>
-          <div className="inlineForm">
-            <input placeholder="New property name" value={newPropertyName} onChange={(e) => setNewPropertyName(e.target.value)} />
-            <button className="primaryBtn" onClick={addProperty}>Add Property</button>
-          </div>
+          {can("can_add_property") && (
+            <div className="inlineForm">
+              <input placeholder="New property name" value={newPropertyName} onChange={(e) => setNewPropertyName(e.target.value)} />
+              <button className="primaryBtn" onClick={addProperty}>Add Property</button>
+            </div>
+          )}
 
           <div className="gridList">
             {properties.map((p) => (
@@ -573,8 +746,12 @@ export default function App() {
                       )}
                     </div>
                     <div>
-                      <button onClick={() => { setEditingPropertyId(p.id); setEditingPropertyName(p.name); }}>Edit</button>
-                      <button className="dangerSoft" onClick={() => deleteProperty(p.id)}><Trash2 size={15} /></button>
+                      {can("can_edit_property") && (
+                        <button onClick={() => { setEditingPropertyId(p.id); setEditingPropertyName(p.name); }}>Edit</button>
+                      )}
+                      {can("can_delete_property") && (
+                        <button className="dangerSoft" onClick={() => deleteProperty(p.id)}><Trash2 size={15} /></button>
+                      )}
                     </div>
                   </>
                 )}
@@ -586,17 +763,113 @@ export default function App() {
 
       {activeView === "users" && (
         <section className="card">
-          <h2>Add Staff Login</h2>
-          <div className="inlineForm">
-            <input placeholder="Staff email" value={staffEmail} onChange={(e) => setStaffEmail(e.target.value)} />
-            <input placeholder="Staff password" value={staffPassword} onChange={(e) => setStaffPassword(e.target.value)} />
-            <button className="primaryBtn" onClick={addStaffUser}><UserPlus size={15} /> Add Staff</button>
-          </div>
+          {can("can_add_user") && (
+            <>
+              <h2>Add Staff Login</h2>
+              <div className="inlineForm">
+                <input placeholder="Staff email" value={staffEmail} onChange={(e) => setStaffEmail(e.target.value)} />
+                <input placeholder="Staff password" value={staffPassword} onChange={(e) => setStaffPassword(e.target.value)} />
+              </div>
+
+              <div className="listItem" style={{ marginTop: 12 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={newStaffIsAdmin}
+                    onChange={(e) => setNewStaffIsAdmin(e.target.checked)}
+                  />
+                  <b>Make Admin (turns on every category below)</b>
+                </label>
+
+                <div className="gridList" style={{ marginTop: 10, opacity: newStaffIsAdmin ? 0.5 : 1 }}>
+                  {CATEGORIES.map((c) => (
+                    <label key={c.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <input
+                        type="checkbox"
+                        disabled={newStaffIsAdmin}
+                        checked={newStaffIsAdmin || !!newStaffPermissions[c.key]}
+                        onChange={(e) =>
+                          setNewStaffPermissions((old) => ({ ...old, [c.key]: e.target.checked }))
+                        }
+                      />
+                      {c.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <button className="primaryBtn" onClick={addStaffUser} style={{ marginTop: 12 }}>
+                <UserPlus size={15} /> Add Staff
+              </button>
+            </>
+          )}
+
+          {(isAdmin || can("can_delete_user")) && (
+            <>
+              <h2 style={{ marginTop: 24 }}>Existing Users</h2>
+              <div className="gridList">
+                {allProfiles.map((p) => (
+                  <div className="listItem" key={p.id}>
+                    <div className="propertyDetailsBlock">
+                      <div className="propertyTitleRow">
+                        <div>
+                          <b>{p.email}</b>
+                          <p>
+                            {p.is_super_admin ? "Super Admin" : p.is_admin ? "Admin" : "Staff"}
+                            {p.is_disabled ? " • Disabled" : ""}
+                          </p>
+                        </div>
+                        {p.is_super_admin ? (
+                          <Lock size={16} title="Super admins always have full access" />
+                        ) : (
+                          can("can_delete_user") && (
+                            <button
+                              className="dangerSoft"
+                              onClick={() => setUserDisabled(p.id, !p.is_disabled)}
+                            >
+                              <Trash2 size={15} /> {p.is_disabled ? "Enable" : "Disable"}
+                            </button>
+                          )
+                        )}
+                      </div>
+
+                      {!p.is_super_admin && isAdmin && (
+                        <div className="propertyBookingList">
+                          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <input
+                              type="checkbox"
+                              checked={!!p.is_admin}
+                              onChange={(e) => updateProfileAdmin(p.id, e.target.checked)}
+                            />
+                            <b>Admin (full access)</b>
+                          </label>
+                          <div className="gridList" style={{ opacity: p.is_admin ? 0.5 : 1 }}>
+                            {CATEGORIES.map((c) => (
+                              <label key={c.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <input
+                                  type="checkbox"
+                                  disabled={p.is_admin}
+                                  checked={p.is_admin || !!p[c.key]}
+                                  onChange={(e) => updateProfilePermission(p.id, c.key, e.target.checked)}
+                                />
+                                {c.label}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </section>
       )}
 
       {activeView === "bookings" && (
         <section className="twoCol">
+          {((editingBookingId && can("can_edit_booking")) || (!editingBookingId && can("can_add_booking"))) ? (
           <div className="card">
             <h2>{editingBookingId ? "Edit Booking" : "Add Booking"}</h2>
 
@@ -663,6 +936,11 @@ export default function App() {
               </button>
             )}
           </div>
+          ) : (
+            <div className="card">
+              <div className="empty">You don't have permission to {editingBookingId ? "edit" : "add"} bookings.</div>
+            </div>
+          )}
 
           <div className="card">
             <div className="sectionHeader">
@@ -692,8 +970,10 @@ export default function App() {
                     {b.notes && <p>Notes: {b.notes}</p>}
                   </div>
                   <div className="actionButtons">
-                    <button onClick={() => startEditBooking(b)}>Edit</button>
-                    <button className="dangerSoft" onClick={() => deleteBooking(b.id)}><Trash2 size={15} /></button>
+                    {can("can_edit_booking") && <button onClick={() => startEditBooking(b)}>Edit</button>}
+                    {can("can_cancel_booking") && (
+                      <button className="dangerSoft" onClick={() => deleteBooking(b.id)}><Trash2 size={15} /></button>
+                    )}
                   </div>
                 </div>
               );
