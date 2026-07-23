@@ -556,7 +556,7 @@ export default function App() {
           <div className="loginHeader">
             <div className="iconBox"><Lock size={30} /></div>
             <div>
-              <h1>GTV Hospitality</h1>
+<h1>HostTerra</h1>
               <p>Cloud login powered by Supabase</p>
             </div>
           </div>
@@ -587,7 +587,7 @@ export default function App() {
     <div className="app">
       <header>
         <div>
-          <h1>GTV Hospitality</h1>
+<h1>HostTerra</h1>
           <p>Logged in as {session.user.email}</p>
         </div>
         <nav>
