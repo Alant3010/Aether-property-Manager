@@ -1,4 +1,3 @@
-
 import React, { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import {
@@ -892,47 +891,73 @@ export default function App() {
           <div className="card">
             <h2>{editingBookingId ? "Edit Booking" : "Add Booking"}</h2>
 
-            <label>Property</label>
-            <select value={bookingForm.property_id} onChange={(e) => setBookingForm({ ...bookingForm, property_id: e.target.value })}>
-              {properties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+            <div className="formGrid">
+              <div className="formField">
+                <label>Property</label>
+                <select value={bookingForm.property_id} onChange={(e) => setBookingForm({ ...bookingForm, property_id: e.target.value })}>
+                  {properties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
 
-            <label>Guest Name</label>
-            <input value={bookingForm.guest_name} onChange={(e) => setBookingForm({ ...bookingForm, guest_name: e.target.value })} placeholder="Guest name" />
+              <div className="formField">
+                <label>Guest Name</label>
+                <input value={bookingForm.guest_name} onChange={(e) => setBookingForm({ ...bookingForm, guest_name: e.target.value })} placeholder="Guest name" />
+              </div>
 
-            <label>Phone</label>
-            <input value={bookingForm.phone} onChange={(e) => setBookingForm({ ...bookingForm, phone: e.target.value })} placeholder="Phone number" />
+              <div className="formField">
+                <label>Phone</label>
+                <input value={bookingForm.phone} onChange={(e) => setBookingForm({ ...bookingForm, phone: e.target.value })} placeholder="Phone number" />
+              </div>
 
-            <label>Number of Guests</label>
-            <input value={bookingForm.number_of_guests} onChange={(e) => setBookingForm({ ...bookingForm, number_of_guests: e.target.value })} placeholder="Eg: 4" />
+              <div className="formField">
+                <label>Number of Guests</label>
+                <input value={bookingForm.number_of_guests} onChange={(e) => setBookingForm({ ...bookingForm, number_of_guests: e.target.value })} placeholder="Eg: 4" />
+              </div>
 
-            <label>Booking Source</label>
-            <select value={bookingForm.source} onChange={(e) => setBookingForm({ ...bookingForm, source: e.target.value })}>
-              {["Direct", "Airbnb", "MakeMyTrip", "Booking.com", "Other"].map((s) => <option key={s}>{s}</option>)}
-            </select>
+              <div className="formField">
+                <label>Booking Source</label>
+                <select value={bookingForm.source} onChange={(e) => setBookingForm({ ...bookingForm, source: e.target.value })}>
+                  {["Direct", "Airbnb", "MakeMyTrip", "Booking.com", "Other"].map((s) => <option key={s}>{s}</option>)}
+                </select>
+              </div>
 
-            <label>Check-in</label>
-            <input type="date" value={bookingForm.check_in} onChange={(e) => setBookingForm({ ...bookingForm, check_in: e.target.value })} />
+              <div className="formField">
+                <label>Check-in</label>
+                <input type="date" value={bookingForm.check_in} onChange={(e) => setBookingForm({ ...bookingForm, check_in: e.target.value })} />
+              </div>
 
-            <label>Check-out</label>
-            <input type="date" value={bookingForm.check_out} onChange={(e) => setBookingForm({ ...bookingForm, check_out: e.target.value })} />
+              <div className="formField">
+                <label>Check-out</label>
+                <input type="date" value={bookingForm.check_out} onChange={(e) => setBookingForm({ ...bookingForm, check_out: e.target.value })} />
+              </div>
 
-            <label>Total Amount</label>
-            <input value={bookingForm.amount} onChange={(e) => setBookingForm({ ...bookingForm, amount: e.target.value })} placeholder="₹ total" />
+              <div className="formField">
+                <label>Total Amount</label>
+                <input value={bookingForm.amount} onChange={(e) => setBookingForm({ ...bookingForm, amount: e.target.value })} placeholder="₹ total" />
+              </div>
 
-            <label>Advance Paid</label>
-            <input value={bookingForm.advance_paid} onChange={(e) => setBookingForm({ ...bookingForm, advance_paid: e.target.value })} placeholder="₹ advance paid" />
+              <div className="formField">
+                <label>Advance Paid</label>
+                <input value={bookingForm.advance_paid} onChange={(e) => setBookingForm({ ...bookingForm, advance_paid: e.target.value })} placeholder="₹ advance paid" />
+              </div>
 
-            <label>Payment Mode</label>
-            <select value={bookingForm.payment_mode} onChange={(e) => setBookingForm({ ...bookingForm, payment_mode: e.target.value })}>
-              {["Cash", "UPI", "Bank Transfer", "Card", "Other"].map((s) => <option key={s}>{s}</option>)}
-            </select>
+              <div className="formField">
+                <label>Payment Mode</label>
+                <select value={bookingForm.payment_mode} onChange={(e) => setBookingForm({ ...bookingForm, payment_mode: e.target.value })}>
+                  {["Cash", "UPI", "Bank Transfer", "Card", "Other"].map((s) => <option key={s}>{s}</option>)}
+                </select>
+              </div>
 
-            <label>Balance Amount</label>
-            <input value={bookingForm.balance_amount} onChange={(e) => setBookingForm({ ...bookingForm, balance_amount: e.target.value })} placeholder="₹ balance" />
+              <div className="formField">
+                <label>Balance Amount</label>
+                <input value={bookingForm.balance_amount} onChange={(e) => setBookingForm({ ...bookingForm, balance_amount: e.target.value })} placeholder="₹ balance" />
+              </div>
 
-            <label>Notes</label>
-            <textarea value={bookingForm.notes} onChange={(e) => setBookingForm({ ...bookingForm, notes: e.target.value })} placeholder="Notes" />
+              <div className="formField formFieldWide">
+                <label>Notes</label>
+                <textarea value={bookingForm.notes} onChange={(e) => setBookingForm({ ...bookingForm, notes: e.target.value })} placeholder="Notes" />
+              </div>
+            </div>
 
             {conflicts.length > 0 && (
               <div className="errorBox">
