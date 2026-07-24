@@ -43,6 +43,19 @@ function isDateInsideBooking(dateValue, booking) {
   return date >= new Date(booking.check_in) && date < new Date(booking.check_out);
 }
 
+// "confirmed" = guest is currently checked in (stay is happening today)
+// "upcoming"  = stay hasn't started yet
+// "past"      = stay has already ended
+function getBookingStatus(booking) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const checkIn = new Date(booking.check_in + "T00:00:00");
+  const checkOut = new Date(booking.check_out + "T00:00:00");
+  if (today >= checkIn && today < checkOut) return "confirmed";
+  if (checkIn > today) return "upcoming";
+  return "past";
+}
+
 const emptyBooking = {
   property_id: "",
   guest_name: "",
@@ -630,6 +643,7 @@ export default function App() {
               const p = properties.find((x) => x.id === b.property_id);
               return (
                 <div className="miniBookingRow" key={b.id}>
+                  <span className={`statusBadge status-${getBookingStatus(b)}`}>{getBookingStatus(b)}</span>
                   <b>{b.guest_name}</b>
                   <span>{p?.name || "Deleted property"}</span>
                   <span>{formatDate(b.check_in)} to {formatDate(b.check_out)}</span>
@@ -670,6 +684,11 @@ export default function App() {
 
               <div className="calendarBox">
                 <h3>{properties.find((p) => p.id === activePropertyId)?.name}</h3>
+                <div className="calendarLegend">
+                  <span className="legendDot status-confirmed"></span> Confirmed (checked in)
+                  <span className="legendDot status-upcoming"></span> Upcoming
+                  <span className="legendDot status-past"></span> Past
+                </div>
                 <div className="week">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => <span key={d}>{d}</span>)}</div>
                 <div className="days">
                   {buildCalendarDays(activePropertyId).map((day) =>
@@ -679,7 +698,7 @@ export default function App() {
                       <div key={day.id} className="day">
                         <b>{day.day}</b>
                         {day.bookings.map((b) => (
-                          <div className="bookingChip" key={b.id}>{b.guest_name}</div>
+                          <div className={`bookingChip status-${getBookingStatus(b)}`} key={b.id}>{b.guest_name}</div>
                         ))}
                       </div>
                     )
@@ -771,8 +790,8 @@ export default function App() {
                 <input placeholder="Staff password" value={staffPassword} onChange={(e) => setStaffPassword(e.target.value)} />
               </div>
 
-              <div className="listItem" style={{ marginTop: 12 }}>
-                <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div className="permissionCard" style={{ marginTop: 12 }}>
+                <label className="permissionAdminRow">
                   <input
                     type="checkbox"
                     checked={newStaffIsAdmin}
@@ -781,9 +800,9 @@ export default function App() {
                   <b>Make Admin (turns on every category below)</b>
                 </label>
 
-                <div className="gridList" style={{ marginTop: 10, opacity: newStaffIsAdmin ? 0.5 : 1 }}>
+                <div className="permissionGrid" style={{ opacity: newStaffIsAdmin ? 0.5 : 1 }}>
                   {CATEGORIES.map((c) => (
-                    <label key={c.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <label key={c.key} className="permissionItem">
                       <input
                         type="checkbox"
                         disabled={newStaffIsAdmin}
@@ -792,7 +811,7 @@ export default function App() {
                           setNewStaffPermissions((old) => ({ ...old, [c.key]: e.target.checked }))
                         }
                       />
-                      {c.label}
+                      <span>{c.label}</span>
                     </label>
                   ))}
                 </div>
@@ -834,8 +853,8 @@ export default function App() {
                       </div>
 
                       {!p.is_super_admin && isAdmin && (
-                        <div className="propertyBookingList">
-                          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div className="permissionCard">
+                          <label className="permissionAdminRow">
                             <input
                               type="checkbox"
                               checked={!!p.is_admin}
@@ -843,16 +862,16 @@ export default function App() {
                             />
                             <b>Admin (full access)</b>
                           </label>
-                          <div className="gridList" style={{ opacity: p.is_admin ? 0.5 : 1 }}>
+                          <div className="permissionGrid" style={{ opacity: p.is_admin ? 0.5 : 1 }}>
                             {CATEGORIES.map((c) => (
-                              <label key={c.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <label key={c.key} className="permissionItem">
                                 <input
                                   type="checkbox"
                                   disabled={p.is_admin}
                                   checked={p.is_admin || !!p[c.key]}
                                   onChange={(e) => updateProfilePermission(p.id, c.key, e.target.checked)}
                                 />
-                                {c.label}
+                                <span>{c.label}</span>
                               </label>
                             ))}
                           </div>
@@ -958,6 +977,7 @@ export default function App() {
               return (
                 <div className="listItem" key={b.id}>
                   <div>
+                    <span className={`statusBadge status-${getBookingStatus(b)}`}>{getBookingStatus(b)}</span>
                     <b>{b.guest_name}</b>
                     <p>{p?.name || "Deleted property"} • {b.source}</p>
                     <p>{formatDate(b.check_in)} to {formatDate(b.check_out)}</p>
