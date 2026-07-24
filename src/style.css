@@ -1,4 +1,3 @@
-
 /* ==========================================================
    HostTerra — theme tokens (from logo: deep forest green,
    olive/sage green, warm gold, cream)
@@ -180,6 +179,36 @@ nav button.active {
 }
 
 .inlineForm { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px 16px;
+  margin-top: 6px;
+}
+@media (max-width: 520px) {
+  .formGrid { grid-template-columns: 1fr; }
+}
+.formField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.formField label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--sage-dark);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.formField input,
+.formField select,
+.formField textarea {
+  width: 100%;
+}
+.formField textarea { min-height: 70px; resize: vertical; }
+.formFieldWide { grid-column: 1 / -1; }
 
 .gridList {
   display: grid;
