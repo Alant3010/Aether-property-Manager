@@ -114,6 +114,7 @@ export default function App() {
   const [staffPassword, setStaffPassword] = useState("");
   const [newStaffPermissions, setNewStaffPermissions] = useState(() => emptyPermissionSet(false));
   const [newStaffIsAdmin, setNewStaffIsAdmin] = useState(false);
+  const [newStaffPropertyIds, setNewStaffPropertyIds] = useState([]);
 
   const [myProfile, setMyProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(true);
@@ -141,6 +142,8 @@ export default function App() {
   };
   const isAdmin = !!(myProfile && (myProfile.is_admin || myProfile.is_super_admin));
   const isSuperAdmin = !!(myProfile && myProfile.is_super_admin);
+  const allowedPropertyIds = myProfile?.allowed_property_ids || [];
+  const canSeeProperty = (propertyId) => isAdmin || allowedPropertyIds.includes(propertyId);
 
   const loadProfile = async (userId) => {
     setProfileLoading(true);
@@ -279,6 +282,16 @@ export default function App() {
 
   const selectedProperty = properties.find((p) => p.id === bookingForm.property_id);
 
+  const visibleProperties = useMemo(
+    () => (isAdmin ? properties : properties.filter((p) => allowedPropertyIds.includes(p.id))),
+    [properties, isAdmin, allowedPropertyIds.join(",")]
+  );
+
+  const visibleBookings = useMemo(
+    () => (isAdmin ? bookings : bookings.filter((b) => allowedPropertyIds.includes(b.property_id))),
+    [bookings, isAdmin, allowedPropertyIds.join(",")]
+  );
+
   const conflicts = useMemo(() => {
     return bookings.filter(
       (b) =>
@@ -289,7 +302,7 @@ export default function App() {
   }, [bookings, bookingForm.property_id, bookingForm.check_in, bookingForm.check_out, editingBookingId]);
 
   const filteredBookings = useMemo(() => {
-    return bookings
+    return visibleBookings
       .filter((b) => filterProperty === "all" || b.property_id === filterProperty)
       .filter((b) => {
         const propertyName = properties.find((p) => p.id === b.property_id)?.name || "";
@@ -298,16 +311,16 @@ export default function App() {
           .includes(query.toLowerCase());
       })
       .sort((a, b) => new Date(a.check_in) - new Date(b.check_in));
-  }, [bookings, properties, query, filterProperty]);
+  }, [visibleBookings, properties, query, filterProperty]);
 
   const upcomingBookings = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    return bookings
+    return visibleBookings
       .filter((b) => new Date(b.check_out + "T00:00:00") >= today)
       .sort((a, b) => new Date(a.check_in) - new Date(b.check_in));
-  }, [bookings]);
+  }, [visibleBookings]);
 
   const buildCalendarDays = (propertyId) => {
     const [yearText, monthText] = calendarMonth.split("-");
@@ -387,9 +400,12 @@ export default function App() {
 
   const cancelEditBooking = () => {
     setEditingBookingId("");
+    const defaultPropertyId = isAdmin
+      ? properties[0]?.id || ""
+      : properties.find((p) => (myProfile?.allowed_property_ids || []).includes(p.id))?.id || "";
     setBookingForm({
       ...emptyBooking,
-      property_id: properties[0]?.id || "",
+      property_id: defaultPropertyId,
     });
     notice("Booking edit cancelled.");
   };
@@ -427,9 +443,12 @@ export default function App() {
     if (error) return notice(error.message);
 
     setEditingBookingId("");
+    const nextDefaultPropertyId = isAdmin
+      ? properties[0]?.id || ""
+      : properties.find((p) => (myProfile?.allowed_property_ids || []).includes(p.id))?.id || "";
     setBookingForm({
       ...emptyBooking,
-      property_id: properties[0]?.id || "",
+      property_id: nextDefaultPropertyId,
     });
     await loadData();
     notice(editingBookingId ? "Booking updated." : "Booking saved.");
@@ -468,6 +487,7 @@ export default function App() {
           is_admin: newStaffIsAdmin,
           is_super_admin: false,
           is_disabled: false,
+          allowed_property_ids: newStaffIsAdmin ? properties.map((p) => p.id) : newStaffPropertyIds,
           ...permissionValues,
         });
         if (profileError) notice("User created, but saving permissions failed: " + profileError.message);
@@ -480,6 +500,7 @@ export default function App() {
       setStaffPassword("");
       setNewStaffPermissions(emptyPermissionSet(false));
       setNewStaffIsAdmin(false);
+      setNewStaffPropertyIds([]);
       await loadProfiles();
     } catch (err) {
       console.error(err);
@@ -497,8 +518,19 @@ export default function App() {
 
   const updateProfileAdmin = async (profileId, value) => {
     const updates = { is_admin: value };
-    if (value) CATEGORIES.forEach((c) => (updates[c.key] = true));
+    if (value) {
+      CATEGORIES.forEach((c) => (updates[c.key] = true));
+      updates.allowed_property_ids = properties.map((p) => p.id);
+    }
     const { error } = await supabase.from("profiles").update(updates).eq("id", profileId);
+    if (error) return notice(error.message);
+    await loadProfiles();
+  };
+
+  const toggleProfileProperty = async (profile, propertyId, value) => {
+    const current = profile.allowed_property_ids || [];
+    const next = value ? [...new Set([...current, propertyId])] : current.filter((id) => id !== propertyId);
+    const { error } = await supabase.from("profiles").update({ allowed_property_ids: next }).eq("id", profile.id);
     if (error) return notice(error.message);
     await loadProfiles();
   };
@@ -530,7 +562,7 @@ export default function App() {
       "Notes",
     ];
 
-    const rows = bookings.map((b) => {
+    const rows = visibleBookings.map((b) => {
       const property = properties.find((p) => p.id === b.property_id)?.name || b.property_id;
       return [
         property,
@@ -593,7 +625,7 @@ export default function App() {
     );
   }
 
-  const activePropertyId = selectedCalendarPropertyId || properties[0]?.id;
+  const activePropertyId = selectedCalendarPropertyId || visibleProperties[0]?.id;
 
   return (
     <div className="app">
@@ -669,12 +701,14 @@ export default function App() {
             <input type="month" value={calendarMonth} onChange={(e) => setCalendarMonth(e.target.value)} />
           </div>
 
-          {properties.length === 0 ? (
-            <div className="empty">No properties added yet. Add a property first.</div>
+          {visibleProperties.length === 0 ? (
+            <div className="empty">
+              {properties.length === 0 ? "No properties added yet. Add a property first." : "You don't have access to any properties yet. Ask an admin to enable one."}
+            </div>
           ) : (
             <div className="calendarLayout">
               <div className="propertyScroll">
-                {properties.map((p) => (
+                {visibleProperties.map((p) => (
                   <button key={p.id} className={activePropertyId === p.id ? "selectedProperty" : ""} onClick={() => setSelectedCalendarPropertyId(p.id)}>
                     {p.name}
                   </button>
@@ -720,7 +754,7 @@ export default function App() {
           )}
 
           <div className="gridList">
-            {properties.map((p) => (
+            {visibleProperties.map((p) => (
               <div className="listItem" key={p.id}>
                 {editingPropertyId === p.id ? (
                   <>
@@ -816,6 +850,34 @@ export default function App() {
                 </div>
               </div>
 
+              <div className="permissionCard" style={{ marginTop: 12 }}>
+                <div className="permissionAdminRow" style={{ border: "none", marginBottom: 8, paddingBottom: 0 }}>
+                  <b>Properties this user can access</b>
+                </div>
+                {properties.length === 0 ? (
+                  <p className="mutedSmall">No properties added yet.</p>
+                ) : (
+                  <div className="permissionGrid" style={{ opacity: newStaffIsAdmin ? 0.5 : 1 }}>
+                    {properties.map((p) => (
+                      <label key={p.id} className="permissionItem">
+                        <input
+                          type="checkbox"
+                          disabled={newStaffIsAdmin}
+                          checked={newStaffIsAdmin || newStaffPropertyIds.includes(p.id)}
+                          onChange={(e) =>
+                            setNewStaffPropertyIds((old) =>
+                              e.target.checked ? [...old, p.id] : old.filter((id) => id !== p.id)
+                            )
+                          }
+                        />
+                        <span>{p.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {newStaffIsAdmin && <p className="mutedSmall">Admins automatically get every property.</p>}
+              </div>
+
               <button className="primaryBtn" onClick={addStaffUser} style={{ marginTop: 12 }}>
                 <UserPlus size={15} /> Add Staff
               </button>
@@ -876,6 +938,32 @@ export default function App() {
                           </div>
                         </div>
                       )}
+
+                      {!p.is_super_admin && isAdmin && (
+                        <div className="permissionCard">
+                          <div className="permissionAdminRow" style={{ border: "none", marginBottom: 8, paddingBottom: 0 }}>
+                            <b>Properties {p.email} can access</b>
+                          </div>
+                          {properties.length === 0 ? (
+                            <p className="mutedSmall">No properties added yet.</p>
+                          ) : (
+                            <div className="permissionGrid" style={{ opacity: p.is_admin ? 0.5 : 1 }}>
+                              {properties.map((prop) => (
+                                <label key={prop.id} className="permissionItem">
+                                  <input
+                                    type="checkbox"
+                                    disabled={p.is_admin}
+                                    checked={p.is_admin || (p.allowed_property_ids || []).includes(prop.id)}
+                                    onChange={(e) => toggleProfileProperty(p, prop.id, e.target.checked)}
+                                  />
+                                  <span>{prop.name}</span>
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                          {p.is_admin && <p className="mutedSmall">Admins automatically get every property.</p>}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -895,7 +983,7 @@ export default function App() {
               <div className="formField">
                 <label>Property</label>
                 <select value={bookingForm.property_id} onChange={(e) => setBookingForm({ ...bookingForm, property_id: e.target.value })}>
-                  {properties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  {visibleProperties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               </div>
 
@@ -994,7 +1082,7 @@ export default function App() {
 
             <select value={filterProperty} onChange={(e) => setFilterProperty(e.target.value)}>
               <option value="all">All properties</option>
-              {properties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {visibleProperties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
 
             {filteredBookings.length === 0 ? <div className="empty">No bookings found.</div> : filteredBookings.map((b) => {
