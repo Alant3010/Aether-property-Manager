@@ -14,8 +14,8 @@ import {
 } from "lucide-react";
 import "./style.css";
 
-const SUPABASE_URL = "https://ygejzdvgjvgjahtwejiw.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_mbHm2pcEtZN-GzNCrPwL5Q_fw7w5fqU";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
