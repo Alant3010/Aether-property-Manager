@@ -28,9 +28,30 @@ function formatDate(date) {
   });
 }
 
+// Bookings are stored as a half-open range [check_in, check_out).
+// A same-day stay (check_in === check_out) is a valid 1-day booking, but as a
+// zero-width range it wouldn't occupy any day on the calendar or register in
+// overlap checks. This returns the checkout date to actually use for that
+// math: the real check_out, unless it's on or before check_in, in which case
+// we treat the stay as occupying just the check_in day (checkout = check_in + 1 day).
+function getEffectiveCheckoutDate(checkIn, checkOut) {
+  const checkInDate = new Date(checkIn + "T00:00:00");
+  const checkOutDate = new Date(checkOut + "T00:00:00");
+  if (checkOutDate <= checkInDate) {
+    const nextDay = new Date(checkInDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    return nextDay;
+  }
+  return checkOutDate;
+}
+
 function datesOverlap(a1, a2, b1, b2) {
   if (!a1 || !a2 || !b1 || !b2) return false;
-  return new Date(a1) < new Date(b2) && new Date(b1) < new Date(a2);
+  const aStart = new Date(a1 + "T00:00:00");
+  const bStart = new Date(b1 + "T00:00:00");
+  const aEnd = getEffectiveCheckoutDate(a1, a2);
+  const bEnd = getEffectiveCheckoutDate(b1, b2);
+  return aStart < bEnd && bStart < aEnd;
 }
 
 function toDateInput(date) {
@@ -39,7 +60,9 @@ function toDateInput(date) {
 
 function isDateInsideBooking(dateValue, booking) {
   const date = new Date(dateValue);
-  return date >= new Date(booking.check_in) && date < new Date(booking.check_out);
+  const checkIn = new Date(booking.check_in + "T00:00:00");
+  const checkOut = getEffectiveCheckoutDate(booking.check_in, booking.check_out);
+  return date >= checkIn && date < checkOut;
 }
 
 // "confirmed" = guest is currently checked in (stay is happening today)
@@ -49,7 +72,7 @@ function getBookingStatus(booking) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const checkIn = new Date(booking.check_in + "T00:00:00");
-  const checkOut = new Date(booking.check_out + "T00:00:00");
+  const checkOut = getEffectiveCheckoutDate(booking.check_in, booking.check_out);
   if (today >= checkIn && today < checkOut) return "confirmed";
   if (checkIn > today) return "upcoming";
   return "past";
@@ -406,8 +429,8 @@ export default function App() {
     if (!bookingForm.guest_name || !bookingForm.check_in || !bookingForm.check_out) {
       return notice("Enter guest name, check-in date and check-out date.");
     }
-    if (new Date(bookingForm.check_in) >= new Date(bookingForm.check_out)) {
-      return notice("Check-out must be after check-in.");
+    if (new Date(bookingForm.check_in) > new Date(bookingForm.check_out)) {
+      return notice("Check-out cannot be before check-in.");
     }
     if (conflicts.length > 0) {
       return notice("Date already booked for this property. Existing booking is shown below.");
