@@ -54,6 +54,12 @@ function datesOverlap(a1, a2, b1, b2) {
   return aStart < bEnd && bStart < aEnd;
 }
 
+function formatMonthLabel(monthValue) {
+  const [year, month] = monthValue.split("-");
+  const date = new Date(Number(year), Number(month) - 1, 1);
+  return date.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+}
+
 function toDateInput(date) {
   return date.toISOString().slice(0, 10);
 }
@@ -127,6 +133,8 @@ export default function App() {
 
   const [query, setQuery] = useState("");
   const [filterProperty, setFilterProperty] = useState("all");
+  const [filterMonth, setFilterMonth] = useState("all");
+  const [sortOrder, setSortOrder] = useState("upcoming");
 
   const [newPropertyName, setNewPropertyName] = useState("");
   const [editingPropertyId, setEditingPropertyId] = useState("");
@@ -315,17 +323,30 @@ export default function App() {
     );
   }, [bookings, bookingForm.property_id, bookingForm.check_in, bookingForm.check_out, editingBookingId]);
 
+  const bookingMonths = useMemo(() => {
+    const months = new Set();
+    visibleBookings.forEach((b) => {
+      if (b.check_in) months.add(b.check_in.slice(0, 7));
+    });
+    return Array.from(months).sort((a, b) => b.localeCompare(a));
+  }, [visibleBookings]);
+
   const filteredBookings = useMemo(() => {
     return visibleBookings
       .filter((b) => filterProperty === "all" || b.property_id === filterProperty)
+      .filter((b) => filterMonth === "all" || (b.check_in && b.check_in.slice(0, 7) === filterMonth))
       .filter((b) => {
         const propertyName = properties.find((p) => p.id === b.property_id)?.name || "";
         return `${b.guest_name} ${b.phone} ${b.source} ${propertyName} ${b.notes} ${b.payment_mode}`
           .toLowerCase()
           .includes(query.toLowerCase());
       })
-      .sort((a, b) => new Date(a.check_in) - new Date(b.check_in));
-  }, [visibleBookings, properties, query, filterProperty]);
+      .sort((a, b) =>
+        sortOrder === "recent"
+          ? new Date(b.check_in) - new Date(a.check_in)
+          : new Date(a.check_in) - new Date(b.check_in)
+      );
+  }, [visibleBookings, properties, query, filterProperty, filterMonth, sortOrder]);
 
   const upcomingBookings = useMemo(() => {
     const today = new Date();
@@ -1104,6 +1125,18 @@ export default function App() {
             <select value={filterProperty} onChange={(e) => setFilterProperty(e.target.value)}>
               <option value="all">All properties</option>
               {visibleProperties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+
+            <select value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)}>
+              <option value="all">All months</option>
+              {bookingMonths.map((m) => (
+                <option key={m} value={m}>{formatMonthLabel(m)}</option>
+              ))}
+            </select>
+
+            <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}>
+              <option value="upcoming">Sort: Check-in date (earliest first)</option>
+              <option value="recent">Sort: Check-in date (latest first)</option>
             </select>
 
             {filteredBookings.length === 0 ? <div className="empty">No bookings found.</div> : filteredBookings.map((b) => {
