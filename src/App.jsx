@@ -99,6 +99,7 @@ const emptyBooking = {
   advance_paid: "",
   payment_mode: "Cash",
   balance_amount: "",
+  balance_collected: false,
   notes: "",
 };
 
@@ -429,6 +430,7 @@ export default function App() {
       advance_paid: booking.advance_paid || "",
       payment_mode: booking.payment_mode || "Cash",
       balance_amount: booking.balance_amount || "",
+      balance_collected: !!booking.balance_collected,
       notes: booking.notes || "",
     });
     setActiveView("bookings");
@@ -597,6 +599,7 @@ export default function App() {
       "Advance Paid",
       "Payment Mode",
       "Balance Amount",
+      "Balance Collected",
       "Notes",
     ];
 
@@ -614,6 +617,7 @@ export default function App() {
         b.advance_paid,
         b.payment_mode,
         b.balance_amount,
+        b.balance_collected ? "Yes" : "No",
         b.notes,
       ];
     });
@@ -725,7 +729,14 @@ export default function App() {
                   <span>{formatDate(b.check_in)} to {formatDate(b.check_out)}</span>
                   <span>Total: {b.amount ? "₹" + b.amount : "-"}</span>
                   <span>Advance: {b.advance_paid ? "₹" + b.advance_paid : "-"}</span>
-                  <span>Balance: {b.balance_amount ? "₹" + b.balance_amount : "-"}</span>
+                  <span>
+                    Balance: {b.balance_amount ? "₹" + b.balance_amount : "-"}
+                    {b.balance_amount ? (
+                      <span className={`balanceStatus balanceStatus-${b.balance_collected ? "collected" : "pending"}`}>
+                        {b.balance_collected ? "Collected" : "Pending"}
+                      </span>
+                    ) : null}
+                  </span>
                   {can("can_edit_upcoming") && (
                     <button onClick={() => startEditBooking(b)}>Edit</button>
                   )}
@@ -1084,6 +1095,14 @@ export default function App() {
               <div className="formField">
                 <label>Balance Amount</label>
                 <input value={bookingForm.balance_amount} onChange={(e) => setBookingForm({ ...bookingForm, balance_amount: e.target.value })} placeholder="₹ balance" />
+                <label className="checkboxField">
+                  <input
+                    type="checkbox"
+                    checked={!!bookingForm.balance_collected}
+                    onChange={(e) => setBookingForm({ ...bookingForm, balance_collected: e.target.checked })}
+                  />
+                  <span>Balance collected</span>
+                </label>
               </div>
 
               <div className="formField formFieldWide">
@@ -1156,7 +1175,14 @@ export default function App() {
                     <p>Total: {b.amount ? "₹" + b.amount : "-"}</p>
                     <p>Advance: {b.advance_paid ? "₹" + b.advance_paid : "-"}</p>
                     <p>Payment: {b.payment_mode || "-"}</p>
-                    <p>Balance: {b.balance_amount ? "₹" + b.balance_amount : "-"}</p>
+                    <p>
+                      Balance: {b.balance_amount ? "₹" + b.balance_amount : "-"}
+                      {b.balance_amount ? (
+                        <span className={`balanceStatus balanceStatus-${b.balance_collected ? "collected" : "pending"}`}>
+                          {b.balance_collected ? "Collected" : "Pending"}
+                        </span>
+                      ) : null}
+                    </p>
                     {b.notes && <p>Notes: {b.notes}</p>}
                   </div>
                   <div className="actionButtons">
