@@ -92,7 +92,6 @@ function emptyPermissionSet(defaultValue) {
 
 export default function App() {
   const [session, setSession] = useState(null);
-  const [authMode, setAuthMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -160,6 +159,8 @@ export default function App() {
         await supabase.auth.signOut();
         setSession(null);
         setMyProfile(null);
+        setEmail("");
+        setPassword("");
         return;
       }
       setMyProfile(data);
@@ -219,6 +220,8 @@ export default function App() {
         loadProfile(newSession.user.id);
       } else {
         setMyProfile(null);
+        setEmail("");
+        setPassword("");
       }
     });
 
@@ -260,24 +263,12 @@ export default function App() {
     }
   };
 
-  const signUp = async () => {
-    if (!email || !password) return notice("Enter email and password.");
-    setLoading(true);
-    try {
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) return notice(error.message);
-      notice("Account created. If email confirmation is enabled, confirm email first, then login.");
-    } catch (err) {
-      console.error(err);
-      notice("Signup failed. Open the deployed app link, not the Supabase backend link.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const logout = async () => {
     await supabase.auth.signOut();
     setSession(null);
+    setMyProfile(null);
+    setEmail("");
+    setPassword("");
   };
 
   const selectedProperty = properties.find((p) => p.id === bookingForm.property_id);
@@ -606,19 +597,26 @@ export default function App() {
           </div>
 
           <label>Email</label>
-          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            autoComplete="off"
+          />
 
           <label>Password</label>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" />
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            autoComplete="new-password"
+          />
 
           {message && <div className="notice">{message}</div>}
 
-          <button className="primaryBtn" onClick={authMode === "login" ? login : signUp} disabled={loading}>
-            {loading ? "Please wait..." : authMode === "login" ? "Login" : "Create Account"}
-          </button>
-
-          <button className="secondaryBtn" onClick={() => setAuthMode(authMode === "login" ? "signup" : "login")}>
-            {authMode === "login" ? "Create first admin account" : "Already have account? Login"}
+          <button className="primaryBtn" onClick={login} disabled={loading}>
+            {loading ? "Please wait..." : "Login"}
           </button>
         </div>
       </div>
